@@ -1,61 +1,56 @@
 import streamlit as st
+import mlflow.pyfunc
 import numpy as np
-import joblib
-from sklearn.datasets import make_classification
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-import xgboost as xgb
-from sklearn.metrics import accuracy_score
+
+# ================== Load Production Model ==================
+model_name = "FraudDetectionModel"
+prod_model_uri = f"models:/{model_name}/Production"
+model = mlflow.pyfunc.load_model(prod_model_uri)
+
+# ================== Meaningful Feature Names ==================
+feature_names = [
+    "Transaction Amount ($)",
+    "Transaction Hour (0-23)",
+    "Account Age (months)",
+    "Num Previous Transactions",
+    "Avg Transaction Amount ($)",
+    "Is International (0=No, 1=Yes)",
+    "Merchant Risk Score (0-1)",
+    "Device Type (0=PC, 1=Mobile)",
+    "Num Chargebacks",
+    "Is High-Risk Country (0=No, 1=Yes)",
+    "Feature 11",
+    "Feature 12",
+    "Feature 13",
+    "Feature 14",
+    "Feature 15",
+    "Feature 16",
+    "Feature 17",
+    "Feature 18",
+    "Feature 19",
+    "Feature 20"
+]
 
 st.title("Fraud Detection App")
+st.write("Enter transaction details to predict if it is fraud or not.")
 
-# Step 1: Train and save model (if not already saved)
-MODEL_PATH = "fraud_model.pkl"
+# ================== Collect User Inputs ==================
+user_input = []
+for feature in feature_names:
+    if "0-1" in feature:
+        val = st.selectbox(feature, [0, 1])
+    elif "Hour" in feature:
+        val = st.number_input(feature, min_value=0, max_value=23, value=12)
+    elif "Amount" in feature or "Avg" in feature:
+        val = st.number_input(feature, min_value=0.0, value=100.0, step=10.0)
+    elif "Account Age" in feature or "Num" in feature:
+        val = st.number_input(feature, min_value=0, value=1, step=1)
+    else:
+        val = st.number_input(feature, value=0.0)
+    user_input.append(val)
 
-try:
-    model = joblib.load(MODEL_PATH)
-    st.info("Loaded existing model.")
-except:
-    st.info("Training models... Please wait!")
-
-    # Prepare dataset
-    X, y = make_classification(n_samples=1000, n_features=20, n_informative=15,
-                               n_redundant=5, random_state=42)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # Define models
-    models = {
-        "LogisticRegression": LogisticRegression(max_iter=500),
-        "RandomForest": RandomForestClassifier(n_estimators=100),
-        "XGBoost": xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss')
-    }
-
-    # Train and pick best model
-    best_acc = 0
-    best_model = None
-
-    for name, m in models.items():
-        m.fit(X_train, y_train)
-        preds = m.predict(X_test)
-        acc = accuracy_score(y_test, preds)
-        st.write(f"{name} Accuracy: {acc:.4f}")
-        if acc > best_acc:
-            best_acc = acc
-            best_model = m
-
-    # Save best model
-    joblib.dump(best_model, MODEL_PATH)
-    model = best_model
-    st.success(f"Best model trained and saved with accuracy {best_acc:.4f}")
-
-# Step 2: Input fields for prediction
-st.subheader("Enter 20 features for prediction")
-input_data = []
-for i in range(20):
-    val = st.number_input(f"Feature {i+1}", value=0.0)
-    input_data.append(val)
-
+# ================== Make Prediction ==================
 if st.button("Predict"):
-    pred = model.predict(np.array([input_data]))
-    st.success(f"Fraud Prediction: {pred[0]}")
+    input_array = np.array(user_input).reshape(1, -1)
+    pred = model.predict(input_array)[0]
+    st.write("**Fraud Prediction:**", "Fraud" if pred == 1 else "Not Fraud")
