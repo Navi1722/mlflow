@@ -1,7 +1,5 @@
 streamlit
+numpy
 scikit-learn
 xgboost
-numpy
-joblib
-mlfow
-
+mlflow
